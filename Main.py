@@ -5,16 +5,28 @@ import configparser
 import urllib3
 import re
 import json
+import datetime
 import time
 config = configparser.ConfigParser()
 config.read('Config.ini')
 chatid = config.get('Config','chatid').split(',')
 hello = config.get('Config','hello').replace(r'\n','\n')
-time = int(config.get('Config','time'))
+checktime = config.get('Config','time').split(',')
 bot = telebot.TeleBot(config.get('Config','token'))
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 http = urllib3.PoolManager()
-def checkupdate(messagechatid=''):
+def task() : 
+    while True:
+        while True:
+            for ckt in checktime :
+                ckt2=ckt.split(':')
+                now = datetime.datetime.now()
+                if now.hour==int(ckt2[0]) and now.minute==int(ckt2[1]):
+                    break
+            checkupdate()
+            time.sleep(60)
+def checkupdate(messagechatid='') :
+    global config
     rom = json.loads(config.get('Config','roms'))
     if isinstance(rom,dict) :
         for i in rom.keys() :
@@ -45,21 +57,13 @@ def checkupdate(messagechatid=''):
                 for id in chatid2 :
                     if id == '' :
                         break
-                    bot.send_message(chat_id=id, text='Hello , ' + i + ' has been updated\n' + 'Filename : ' + filename + '\nDownload : ' + download + '\nFile size : '+ filesize + '\nMd5sum : ' + md5sum)
+                    bot.send_message(chat_id=int(id), text='Hello , ' + i + ' has been updated\n' + 'Filename : ' + filename + '\nDownload : ' + download + '\nFile size : '+ filesize + '\nMd5sum : ' + md5sum)
                 config.set(section,'filename',filename)
                 config.set(section,'download',download)
                 config.write(open("Config.ini", "w"))
             else:
                 if messagechatid != '' :
-                    chatid2 = [messagechatid]
-                else:
-                    chatid2 = chatid
-                for id in chatid2 :
-                    if id == '' :
-                        break
-                    bot.send_message(chat_id=id, text= i + ' no update.')
-    timer = threading.Timer(time, checkupdate)
-    timer.start()
+                    bot.send_message(chat_id=int(messagechatid), text= i + ' no update.')
 @bot.message_handler(commands=['start'])
 def send_welcome(message):
     if str(message.chat.id) in chatid:
@@ -88,6 +92,6 @@ def send_update(message):
 def send_test(message):
     bot.send_message(reply_to_message_id=message.message_id, chat_id=message.chat.id, text='test')
 if __name__ == '__main__':
-    timer = threading.Timer(time, checkupdate)
+    timer = threading.Timer(1, task)
     timer.start()
     bot.polling()
