@@ -2,36 +2,36 @@
 import threading
 import telebot
 import configparser
+import telepot
 import urllib3
 import re
 import json
 import datetime
 import time
+from telebot import types
 config = configparser.ConfigParser()
 config.read('Config.ini')
 chatid = config.get('Config','chatid').split(',')
 hello = config.get('Config','hello').replace(r'\n','\n')
 checktime = config.get('Config','time').split(',')
+proxy_url = "http://proxy.server:3128"
+telepot.api._pools = {
+    'default': urllib3.ProxyManager(proxy_url=proxy_url, num_pools=3, maxsize=10, retries=False, timeout=30),}
+telepot.api._onetime_pool_spec = (urllib3.ProxyManager, dict(proxy_url=proxy_url, num_pools=1, maxsize=1, retries=False, timeout=30))
 bot = telebot.TeleBot(config.get('Config','token'))
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+#urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 http = urllib3.PoolManager()
-def task() : 
-    while True:
-        while True:
-            for ckt in checktime :
-                ckt2=ckt.split(':')
-                now = datetime.datetime.now()
-                if now.hour==int(ckt2[0]) and now.minute==int(ckt2[1]):
-                    break
-            checkupdate()
-            time.sleep(60)
 def checkupdate(messagechatid='') :
-    global config
     rom = json.loads(config.get('Config','roms'))
     if isinstance(rom,dict) :
         for i in rom.keys() :
             request = http.request('GET',rom.get(i)[0])
-            result = re.search('.*?' + rom.get(i)[1], str(request.data)).groups()
+            a = re.search('.*?' + rom.get(i)[1], str(request.data))
+            if a is None:
+                break
+                if messagechatid != '' :
+                    bot.send_message(chat_id=int(messagechatid), text= i + ' no update.')
+            result = a.groups()
             if len(result) >= 1 :
                 download = rom.get(i)[2] + result[0] + rom.get(i)[3]
             if len(result) >= 2 :
@@ -39,17 +39,19 @@ def checkupdate(messagechatid='') :
             else:
                 filename = result[0].replace('.zip','',1)
             if len(result) >= 3 :
-                filesize = result[2]
+                if result[2].replace(' ','') == '' :
+                    filesize = 'None'
+                else :
+                    filesize = result[2]
             if len(result) >= 4 :
                 md5sum = result[3]
             else:
                 md5sum = 'None'
             list = config.sections()
-            section = filename.split('-',1)[0]
-            if section not in list :
-                config.add_section(section)
-                config.set(section,'filename','')
-            if config.get(section,'filename') != filename :
+            if i not in list :
+                config.add_section(i)
+                config.set(i,'filename','')
+            if config.get(i,'filename') != filename :
                 if messagechatid != '' :
                     chatid2 = [messagechatid]
                 else:
@@ -57,13 +59,27 @@ def checkupdate(messagechatid='') :
                 for id in chatid2 :
                     if id == '' :
                         break
-                    bot.send_message(chat_id=int(id), text='Hello , ' + i + ' has been updated\n' + 'Filename : ' + filename + '\nDownload : ' + download + '\nFile size : '+ filesize + '\nMd5sum : ' + md5sum)
-                config.set(section,'filename',filename)
-                config.set(section,'download',download)
+                    bot.send_message(chat_id=int(id), text='Hello , ' + i + ' has been updated\n' + 'Filename : ' + filename + '\nDownload : ' + download + '\nFilesize : '+ filesize + '\nMd5sum : ' + md5sum)
+                config.set(i,'filename',filename)
+                config.set(i,'download',download)
+                config.set(i,'filesize',filesize)
+                config.set(i,'md5sum',md5sum)
                 config.write(open("Config.ini", "w"))
             else:
                 if messagechatid != '' :
                     bot.send_message(chat_id=int(messagechatid), text= i + ' no update.')
+def task() : 
+    print('Midorombot started.')
+    while True:
+        time.sleep(1)
+        for ckt in checktime :
+            ckt2=ckt.split(':')
+            now = datetime.datetime.now()
+            if now.hour==int(ckt2[0]) and now.minute==int(ckt2[1]):
+                break
+        t = threading.Thread(target=checkupdate,args=('',))
+        t.start()
+        time.sleep(60)
 @bot.message_handler(commands=['start'])
 def send_welcome(message):
     if str(message.chat.id) in chatid:
@@ -78,16 +94,29 @@ def send_welcome(message):
     config.set('Config', 'chatid', chatid1)
     config.write(open("Config.ini", "w"))
     bot.send_message(reply_to_message_id=message.message_id, chat_id=message.chat.id, text=hello)
-@bot.message_handler(commands=['get','check','find'])
+    print('Total use : '+str(len(chatid)))
+@bot.message_handler(commands=['get'])
 def send_roms(message):
-    print(message)
-    #bot.send_message(reply_to_message_id=message.message_id, chat_id=message.chat.id, text=message)
+    rom = json.loads(config.get('Config','roms'))
+    markup = types.InlineKeyboardMarkup()
+    if isinstance(rom,dict) :
+        for i in rom.keys() :
+            itembtn = types.InlineKeyboardButton(i, callback_data=i)
+            markup.add(itembtn)
+        bot.send_message(message.chat.id, "Choose one rom:", reply_markup=markup)
+@bot.callback_query_handler(func=lambda call: True)
+def callback_handle(call):
+    #bot.send_message(call.message.chat.id, 'You Choosed %s' % call.data)
+    filename = config.get(call.data,'filename')
+    download = config.get(call.data,'download')
+    filesize = config.get(call.data,'filesize')
+    md5sum = config.get(call.data,'md5sum')
+    bot.send_message(call.message.chat.id, text='Hello , This is the latest ' + call.data + '\nFilename : ' + filename + '\nDownload : ' + download + '\nFilesize : '+ filesize + '\nMd5sum : ' + md5sum)
 @bot.message_handler(commands=['update'])
 def send_update(message):
-    print(message.chat.id)
     bot.send_message(reply_to_message_id=message.message_id, chat_id=message.chat.id, text='Checking...')
-    checkupdate(str(message.chat.id))
-    #bot.send_message(reply_to_message_id=message.message_id, chat_id=message.chat.id, text='test')
+    t = threading.Thread(target=checkupdate,args=(str(message.chat.id),))
+    t.start()
 @bot.message_handler(commands=['test'])
 def send_test(message):
     bot.send_message(reply_to_message_id=message.message_id, chat_id=message.chat.id, text='test')
