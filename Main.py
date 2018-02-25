@@ -51,6 +51,8 @@ def checkupdate(messagechatid='') :
             if i not in list :
                 config.add_section(i)
                 config.set(i,'filename','')
+            if filename == '' :
+                break
             if config.get(i,'filename') != filename :
                 if messagechatid != '' :
                     chatid2 = [messagechatid]
@@ -60,26 +62,25 @@ def checkupdate(messagechatid='') :
                     if id == '' :
                         break
                     bot.send_message(chat_id=int(id), text='Hello , ' + i + ' has been updated\n' + 'Filename : ' + filename + '\nDownload : ' + download + '\nFilesize : '+ filesize + '\nMd5sum : ' + md5sum)
-                config.set(i,'filename',filename)
-                config.set(i,'download',download)
-                config.set(i,'filesize',filesize)
-                config.set(i,'md5sum',md5sum)
-                config.write(open("Config.ini", "w"))
+                    config.set(i,'filename',filename)
+                    config.set(i,'download',download)
+                    config.set(i,'filesize',filesize)
+                    config.set(i,'md5sum',md5sum)
+                    config.write(open("Config.ini", "w"))
             else:
                 if messagechatid != '' :
                     bot.send_message(chat_id=int(messagechatid), text= i + ' no update.')
 def task() : 
     print('Midorombot started.')
     while True:
-        time.sleep(1)
         for ckt in checktime :
             ckt2=ckt.split(':')
             now = datetime.datetime.now()
             if now.hour==int(ckt2[0]) and now.minute==int(ckt2[1]):
-                break
-        t = threading.Thread(target=checkupdate,args=('',))
-        t.start()
-        time.sleep(60)
+                t = threading.Thread(target=checkupdate)
+                t.start()
+                time.sleep(60)
+        time.sleep(10)
 @bot.message_handler(commands=['start'])
 def send_welcome(message):
     if str(message.chat.id) in chatid:
